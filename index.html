@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Regresión Polinómica Interactiva</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      text-align: center;
+      padding: 20px;
+      background: #f4f7fa;
+      color: #333;
+    }
+
+    h1 {
+      color: #1e88e5;
+    }
+
+    .panel {
+      background: #fff;
+      padding: 15px 25px;
+      margin: 20px auto;
+      max-width: 800px;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-weight: bold;
+      border: none;
+      background: #1e88e5;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1565c0;
+    }
+
+    input[type=range] {
+      width: 80%;
+      margin-top: 10px;
+    }
+
+    canvas {
+      max-width: 700px;
+      margin: 30px auto;
+    }
+
+    #resultado {
+      background: #e3f2fd;
+      border: 2px solid #90caf9;
+      padding: 12px;
+      margin-top: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 8px;
+      color: #0d47a1;
+    }
+
+    table {
+      margin: 20px auto;
+      border-collapse: collapse;
+      width: 80%;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+
+    th {
+      background: #1e88e5;
+      color: white;
+    }
+
+    td {
+      font-size: 15px;
+    }
+
+    .table-controls {
+      margin-top: 10px;
+    }
+
+    #ecuacion {
+      margin-top: 10px;
+      font-style: italic;
+      font-size: 16px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🔮 Predicción de Población</h1>
+
+  <div class="panel">
+    <p>Selecciona el grado del polinomio:</p>
+    <button onclick="cambiarGrado(2)">Grado 2</button>
+    <button onclick="cambiarGrado(3)">Grado 3</button>
+    <button onclick="cambiarGrado(4)">Grado 4</button>
+
+    <p><strong>Selecciona un año:</strong></p>
+    <input type="range" id="añoSlider" min="2000" max="2030" value="2025" step="1">
+    <div id="resultado">Año: 2025 — Población estimada: ???</div>
+    <div id="ecuacion"></div>
+  </div>
+
+  <canvas id="grafico"></canvas>
+
+  <div class="panel">
+    <h2>📋 Historial de Predicciones</h2>
+    <div class="table-controls">
+      <button onclick="limpiarTabla()">🧹 Limpiar tabla</button>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Año</th><th>Población estimada</th></tr>
+      </thead>
+      <tbody id="tablaHistorial"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const años = [2000, 2005, 2010, 2015, 2020];
+    const poblacion = [30, 35, 45, 55, 70];
+    let grado = 2;
+    let grafico;
+
+    function calcularCoeficientes(grado) {
+      const X = años.map(x => Array.from({ length: grado + 1 }, (_, i) => x ** i));
+      const Y = math.matrix(poblacion);
+      const Xmat = math.matrix(X);
+      const Xpinv = math.pinv(Xmat);
+      const coef = math.multiply(Xpinv, Y);
+      return coef.toArray();
+    }
+
+    function predecirPoblacion(x, coef) {
+      return coef.reduce((sum, c, i) => sum + c * x ** i, 0);
+    }
+
+    function generarCurva(coef) {
+      const xs = [], ys = [];
+      for (let x = 2000; x <= 2030; x++) {
+        xs.push(x);
+        ys.push(predecirPoblacion(x, coef));
+      }
+      return { xs, ys };
+    }
+
+    function crearGrafico(xs, ys) {
+      if (grafico) grafico.destroy();
+      const ctx = document.getElementById('grafico').getContext('2d');
+      grafico = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: xs,
+          datasets: [
+            {
+              label: `Curva de predicción (grado ${grado})`,
+              data: ys,
+              borderColor: '#1e88e5',
+              backgroundColor: 'transparent',
+              fill: false,
+              tension: 0.3
+            },
+            {
+              label: 'Datos reales',
+              data: poblacion,
+              borderColor: 'red',
+              backgroundColor: 'red',
+              fill: false,
+              showLine: false,
+              pointRadius: 6,
+              pointStyle: 'circle'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          animation: { duration: 800 },
+          scales: {
+            x: { title: { display: true, text: 'Año' } },
+            y: { title: { display: true, text: 'Población (millones)' } }
+          }
+        }
+      });
+    }
+
+    function actualizarPrediccion(coef) {
+      const año = parseInt(slider.value);
+      const est = predecirPoblacion(año, coef).toFixed(2);
+      resultado.textContent = `Año: ${año} — Población estimada: ${est} millones`;
+      agregarAHistorial(año, est);
+    }
+
+    function agregarAHistorial(año, est) {
+      const tabla = document.getElementById('tablaHistorial');
+      const fila = document.createElement('tr');
+      fila.innerHTML = `<td>${año}</td><td>${est}</td>`;
+      tabla.appendChild(fila);
+    }
+
+    function limpiarTabla() {
+      document.getElementById('tablaHistorial').innerHTML = '';
+    }
+
+    function mostrarEcuacion(coef) {
+      let ecuacion = 'Ecuación: ';
+      coef.forEach((c, i) => {
+        const signo = c >= 0 && i !== 0 ? ' + ' : i !== 0 ? ' - ' : '';
+        const valor = Math.abs(c).toFixed(3);
+        const termino = i === 0 ? `${valor}` : i === 1 ? `${valor}x` : `${valor}x^${i}`;
+        ecuacion += signo + termino;
+      });
+      document.getElementById('ecuacion').textContent = ecuacion;
+    }
+
+    function cambiarGrado(nuevoGrado) {
+      grado = nuevoGrado;
+      const coef = calcularCoeficientes(grado);
+      const { xs, ys } = generarCurva(coef);
+      crearGrafico(xs, ys);
+      actualizarPrediccion(coef);
+      mostrarEcuacion(coef);
+    }
+
+    const slider = document.getElementById('añoSlider');
+    const resultado = document.getElementById('resultado');
+    slider.addEventListener('input', () => {
+      const coef = calcularCoeficientes(grado);
+      actualizarPrediccion(coef);
+    });
+
+    // Inicializar
+    cambiarGrado(grado);
+  </script>
+</body>
+</html>
